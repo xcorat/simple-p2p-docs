@@ -77,16 +77,19 @@ async fn main() -> anyhow::Result<()> {
     // Listen on TCP random port
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
 
-    // Listen on WebRTC-direct UDP port (9090 by default)
-    let udp_port: u16 = std::env::var("SIGNALING_PORT").ok().and_then(|s| s.parse().ok()).unwrap_or(9090);
-    let webrtc_addr: Multiaddr = format!("/ip4/0.0.0.0/udp/{}/webrtc-direct", udp_port).parse()?;
+    // Listen on WebRTC-direct UDP port (use WEBRTC_PORT env var, fallback to 9090)
+    let webrtc_port: u16 = std::env::var("WEBRTC_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(9090);
+    let webrtc_addr: Multiaddr = format!("/ip4/0.0.0.0/udp/{}/webrtc-direct", webrtc_port).parse()?;
     swarm.listen_on(webrtc_addr.clone())?;
 
     let topic = IdentTopic::new("docstore/v1/updates");
     swarm.behaviour_mut().gossipsub.subscribe(&topic)?;
     println!("✓ Subscribed to topic: docstore/v1/updates");
 
-    println!("Listening on TCP & WebRTC port {}", udp_port);
+    println!("Listening on TCP & WebRTC port {}", webrtc_port);
 
     loop {
         match swarm.select_next_some().await {
