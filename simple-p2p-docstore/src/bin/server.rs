@@ -74,22 +74,37 @@ async fn main() -> anyhow::Result<()> {
         })?
         .build();
 
+    // Detect if running on Fly.io
+    let on_flyio = std::env::var("FLY_APP_NAME").is_ok();
+    
     // Listen on TCP random port
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
 
-    // Listen on WebRTC-direct UDP port (use WEBRTC_PORT env var, fallback to 9090)
-    let webrtc_port: u16 = std::env::var("WEBRTC_PORT")
+    // Listen on WebRTC-direct UDP port (use SIGNALING_PORT env var, fallback to 9090)
+    let webrtc_port: u16 = std::env::var("SIGNALING_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(9090);
-    let webrtc_addr: Multiaddr = format!("/ip4/0.0.0.0/udp/{}/webrtc-direct", webrtc_port).parse()?;
+    
+    // On Fly.io, UDP must bind to fly-global-services, otherwise use 0.0.0.0
+    let udp_bind_addr = if on_flyio {
+        "fly-global-services"
+    } else {
+        "0.0.0.0"
+    };
+    
+    let webrtc_addr: Multiaddr = format!("/ip4/{}/udp/{}/webrtc-direct", udp_bind_addr, webrtc_port).parse()?;
     swarm.listen_on(webrtc_addr.clone())?;
 
     let topic = IdentTopic::new("docstore/v1/updates");
     swarm.behaviour_mut().gossipsub.subscribe(&topic)?;
     println!("✓ Subscribed to topic: docstore/v1/updates");
 
-    println!("Listening on TCP & WebRTC port {}", webrtc_port);
+    if on_flyio {
+        println!("Running on Fly.io - UDP bound to fly-global-services:{}", webrtc_port);
+    } else {
+        println!("Running locally - UDP bound to 0.0.0.0:{}", webrtc_port);
+    }
 
     loop {
         match swarm.select_next_some().await {

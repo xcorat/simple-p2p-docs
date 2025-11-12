@@ -1,28 +1,41 @@
-# fly.toml app configuration file
-# See https://fly.io/docs/reference/configuration/ for details
+# fly.toml app configuration file generated for simple-p2p-docstore on 2025-11-12T10:54:19-08:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "simple-p2p-docstore"
-primary_region = "sjc"
+app = 'simple-p2p-docstore'
+primary_region = 'sjc'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [env]
-  ENABLE_WEBRTC = "true"
-  SIGNALING_PORT = "9090"
+  ENABLE_WEBRTC = 'true'
+  SIGNALING_PORT = '9090'
 
-# UDP service for WebRTC signaling (requires dedicated IPv4)
-[[services]]
+[http_service]
   internal_port = 9090
-  protocol = "udp"
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[services]]
+  protocol = 'udp'
+  internal_port = 9090
 
   [[services.ports]]
     port = 9090
 
-# Optional TCP service for native libp2p clients
 [[services]]
+  protocol = 'tcp'
   internal_port = 8080
-  protocol = "tcp"
 
   [[services.ports]]
     port = 8080
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
