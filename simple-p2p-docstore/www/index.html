@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Simple P2P Docstore</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; }
+      input, button { font-size: 1rem; padding: .5rem; }
+      #log { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; border: 1px solid #ccc; padding: 1rem; border-radius: 6px; height: 240px; overflow: auto; }
+      .row { display: flex; gap: .5rem; margin-bottom: .75rem; }
+      .row > input { flex: 1; }
+    </style>
+  </head>
+  <body>
+    <h1>Simple P2P Docstore (libp2p WebRTC)</h1>
+
+    <div class="row">
+      <input id="serverAddr" placeholder="/ip4/127.0.0.1/udp/9090/webrtc-direct/certhash/<hash>/p2p/<peer-id>" />
+      <button id="connectBtn">Connect</button>
+    </div>
+
+    <div class="row">
+      <input id="msg" placeholder="Message to publish (gossipsub)" />
+      <button id="sendBtn">Publish</button>
+    </div>
+
+    <div id="log"></div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
