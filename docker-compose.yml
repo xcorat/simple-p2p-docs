@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  p2p-server:
+    build:
+      context: ./simple-p2p-docstore
+      dockerfile: Dockerfile
+    container_name: simple-p2p-server
+    environment:
+      - SIGNALING_PORT=9090
+
+    user: "1000:1000"
+    
+    ports:
+      - "9090:9090/udp"
+
+    restart: unless-stopped

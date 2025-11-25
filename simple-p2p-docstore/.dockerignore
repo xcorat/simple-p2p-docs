@@ -1,0 +1,11 @@
+target
+pkg
+www/pkg
+**/.git
+**/.idea
+**/.vscode
+**/*.rs.bk
+**/*.d
+**/node_modules
+**/*.log
+**/*.tmp
