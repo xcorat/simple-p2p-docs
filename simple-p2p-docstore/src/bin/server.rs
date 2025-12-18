@@ -1,9 +1,8 @@
-use std::time::Duration;
-
 use futures::prelude::*;
 use libp2p::core::muxing::StreamMuxerBox;
-use libp2p::gossipsub::{self, IdentTopic, MessageAuthenticity};
+use libp2p::gossipsub::{self};
 use libp2p::identify;
+use libp2p_kad::{Behaviour as KademliaBehaviour, store::MemoryStore, Event as KademliaEvent, QueryResult};
 use libp2p::identity;
 use std::path::{Path, PathBuf};
 use std::fs::OpenOptions;
@@ -17,6 +16,9 @@ use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
 use libp2p::{Multiaddr, PeerId};
 use libp2p_yamux as yamux;
 
+use simple_p2p_docstore::behaviour::{make_docstore_gossipsub, make_peer_dht};
+use simple_p2p_docstore::node::{NodeBuilder, NodeRole};
+
 #[cfg(not(target_arch = "wasm32"))]
 use libp2p::{tcp, Transport};
 #[cfg(not(target_arch = "wasm32"))]
@@ -27,26 +29,13 @@ struct MyBehaviour {
     ping: libp2p::ping::Behaviour,
     gossipsub: gossipsub::Behaviour,
     identify: identify::Behaviour,
+    kademlia: KademliaBehaviour<MemoryStore>,
+
+    #[cfg(not(target_arch = "wasm32"))]
+    relay: libp2p::relay::Behaviour,
 }
 
-fn mk_gossipsub(local_key: &identity::Keypair) -> gossipsub::Behaviour {
-    let config = gossipsub::ConfigBuilder::default()
-        .validation_mode(gossipsub::ValidationMode::Strict)
-        .heartbeat_interval(Duration::from_secs(1))
-        .build()
-        .expect("valid gossipsub config");
-
-    gossipsub::Behaviour::new(
-        MessageAuthenticity::Signed(local_key.clone()),
-        config,
-    )
-    .expect("gossipsub")
-}
-
-fn mk_identify(local_pub: &identity::PublicKey) -> identify::Behaviour {
-    let cfg = identify::Config::new("simple-p2p-docstore/0.1".to_string(), local_pub.clone());
-    identify::Behaviour::new(cfg)
-}
+// PeerDHT and DocStore behaviour are provided by `src/behaviour`
 
 fn load_or_create_identity(path: &Path) -> anyhow::Result<identity::Keypair> {
     // Try to load existing keypair from disk (protobuf encoding). If not present, generate and persist.
@@ -117,11 +106,28 @@ async fn main() -> anyhow::Result<()> {
             .map(|(peer_id, conn), _| (peer_id, StreamMuxerBox::new(conn))))
         })?
         .with_behaviour(|key| {
-            Ok(MyBehaviour {
-                ping: libp2p::ping::Behaviour::default(),
-                gossipsub: mk_gossipsub(key),
-                identify: mk_identify(&key.public()),
-            })
+            #[cfg(target_arch = "wasm32")]
+            {
+                let (ping_beh, gossipsub_beh, identify_beh, kademlia_beh) = NodeBuilder::new(NodeRole::Relay).build_behaviours(key);
+                Ok(MyBehaviour {
+                    ping: ping_beh,
+                    gossipsub: gossipsub_beh,
+                    identify: identify_beh,
+                    kademlia: kademlia_beh,
+                })
+            }
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let (ping_beh, gossipsub_beh, identify_beh, kademlia_beh, relay_beh) = NodeBuilder::new(NodeRole::Relay).build_behaviours(key);
+                Ok(MyBehaviour {
+                    ping: ping_beh,
+                    gossipsub: gossipsub_beh,
+                    identify: identify_beh,
+                    kademlia: kademlia_beh,
+                    relay: relay_beh.expect("relay behaviour expected for relay role"),
+                })
+            }
         })?
         .build();
 
@@ -133,11 +139,49 @@ async fn main() -> anyhow::Result<()> {
     let webrtc_addr: Multiaddr = format!("/ip4/0.0.0.0/udp/{}/webrtc-direct", udp_port).parse()?;
     swarm.listen_on(webrtc_addr.clone())?;
 
-    let topic = IdentTopic::new("docstore/v1/updates");
-    swarm.behaviour_mut().gossipsub.subscribe(&topic)?;
+    // Subscribe to the public docstore topic via behaviour helper
+    simple_p2p_docstore::behaviour::docstore::subscribe(&mut swarm.behaviour_mut().gossipsub)?;
     println!("✓ Subscribed to topic: docstore/v1/updates");
 
     println!("Listening on TCP & WebRTC port {}", udp_port);
+
+    // Bootstrap peers (if provided) - environment variable: BOOTSTRAP_PEERS (comma-separated multiaddrs)
+    if let Ok(peers) = std::env::var("BOOTSTRAP_PEERS") {
+        for p in peers.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            match p.parse::<Multiaddr>() {
+                Ok(addr) => {
+                    // Try to extract a PeerId from the multiaddr. If found, add it into Kademlia store; otherwise dial.
+                    let mut peer_id_opt: Option<PeerId> = None;
+                    for protocol in addr.iter() {
+                        use libp2p::multiaddr::Protocol;
+                        if let Protocol::P2p(pid) = protocol {
+                            peer_id_opt = Some(pid);
+                        }
+                    }
+                    if let Some(peer_id) = peer_id_opt {
+                        swarm.behaviour_mut().kademlia.add_address(&peer_id, addr.clone());
+                        println!("Added bootstrap address for {}: {}", peer_id, addr);
+                    } else {
+                        // Dial the address; this will eventually learn addresses from the peer via Identify
+                        if let Err(e) = swarm.dial(addr.clone()) {
+                            println!("Failed to dial bootstrap addr {}: {}", addr, e);
+                        } else {
+                            println!("Dialed bootstrap address: {}", addr);
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("Invalid bootstrap multiaddr {}: {}", p, e);
+                }
+            }
+        }
+        // Kick off bootstrap query
+        if let Err(e) = swarm.behaviour_mut().kademlia.bootstrap() {
+            println!("Failed to bootstrap Kademlia: {}", e);
+        } else {
+            println!("Kademlia bootstrap started");
+        }
+    }
 
     loop {
         match swarm.select_next_some().await {
@@ -164,10 +208,35 @@ async fn main() -> anyhow::Result<()> {
                     MyBehaviourEvent::Gossipsub(gossipsub::Event::Unsubscribed { peer_id, topic }) => {
                         println!("✗ Peer {} unsubscribed from topic: {:?}", peer_id, topic);
                     }
-                    _ => {
-                        // Other events (ping, identify, etc.)
-                        tracing::debug!("Behaviour event: {:?}", ev);
-                    }
+                        MyBehaviourEvent::Identify(identify::Event::Received { peer_id, info, .. }) => {
+                            tracing::debug!("Identify Received for peer {}: addresses: {:?}", peer_id, info.listen_addrs);
+                            for addr in info.listen_addrs {
+                                swarm.behaviour_mut().kademlia.add_address(&peer_id, addr.clone());
+                                println!("Added address {} for peer {} to Kademlia", addr, peer_id);
+                            }
+                        }
+                        MyBehaviourEvent::Kademlia(evt) => {
+                            // Log some Kademlia events for now
+                            tracing::debug!("Kademlia event: {:?}", evt);
+                            match evt {
+                                KademliaEvent::OutboundQueryProgressed { id, result, .. } => {
+                                    match result {
+                                        QueryResult::GetClosestPeers(Ok(get_closest)) => {
+                                            println!("Kademlia GetClosestPeers result for query {:?}: peers={:?}", id, get_closest.peers);
+                                        }
+                                        QueryResult::GetClosestPeers(Err(err)) => {
+                                            println!("Kademlia GetClosestPeers query {:?} failed: {:?}", id, err);
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {
+                            // Other events (ping, identify, etc.)
+                            tracing::debug!("Behaviour event: {:?}", ev);
+                        }
                 }
             }
             SwarmEvent::ConnectionEstablished { peer_id, .. } => {

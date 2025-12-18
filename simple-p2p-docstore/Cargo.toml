@@ -16,8 +16,11 @@ libp2p = { git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(
     "identify",
     "ping",
     "gossipsub",
+    "kad",
     "macros",
+    "relay",
 ] }
+libp2p_kad = { package = "libp2p-kad", git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(webrtc)-implement-webrtc-protocol-for-browser-to-browser-communication" }
 
 # Async and utilities
 futures = "0.3"
@@ -41,9 +44,11 @@ libp2p = { git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(
     "identify",
     "ping",
     "gossipsub",
+    "kad",
     "macros",
     "wasm-bindgen",
 ] }
+libp2p_kad = { package = "libp2p-kad", git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(webrtc)-implement-webrtc-protocol-for-browser-to-browser-communication" }
 
 # Browser transport - using PR #5978 branch
 libp2p-webrtc-websys = { git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(webrtc)-implement-webrtc-protocol-for-browser-to-browser-communication", package = "libp2p-webrtc-websys" }
@@ -66,12 +71,15 @@ libp2p = { git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(
     "identify",
     "ping",
     "gossipsub",
+    "kad",
     "macros",
     "tcp",
     "tokio",
     "noise",
     "yamux",
+    "relay",
 ] }
+libp2p_kad = { package = "libp2p-kad", git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(webrtc)-implement-webrtc-protocol-for-browser-to-browser-communication" }
 
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = "0.3"

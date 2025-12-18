@@ -10,6 +10,13 @@
       #log { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; border: 1px solid #ccc; padding: 1rem; border-radius: 6px; height: 240px; overflow: auto; }
       .row { display: flex; gap: .5rem; margin-bottom: .75rem; }
       .row > input { flex: 1; }
+      #networkStatus { border: 1px solid #ccc; padding: 1rem; border-radius: 6px; margin-top: 1rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; }
+      #networkStatus h3 { margin-top: 0; font-size: 1rem; }
+      .status-section { margin-bottom: 1rem; }
+      .status-section h4 { margin: 0.5rem 0 0.25rem 0; font-size: 0.85rem; color: #666; }
+      .status-section .empty { color: #999; font-style: italic; }
+      .peer-item { margin-left: 1rem; }
+      .peer-addrs { margin-left: 2rem; font-size: 0.8rem; color: #555; }
     </style>
   </head>
   <body>
@@ -25,7 +32,36 @@
       <button id="sendBtn">Publish</button>
     </div>
 
+    <div class="row">
+      <input id="peerId" placeholder="PeerId to find (base58)" />
+      <button id="findPeerBtn">Find Peer</button>
+    </div>
+
     <div id="log"></div>
+
+    <div id="networkStatus">
+      <h3>Network Status</h3>
+      <div class="status-section">
+        <h4>Listen Addresses:</h4>
+        <div id="listenAddrs" class="empty">Not connected</div>
+      </div>
+      <div class="status-section">
+        <h4>Connected Peers:</h4>
+        <div id="connectedPeers" class="empty">None</div>
+      </div>
+      <div class="status-section">
+        <h4>Discovered Peers (Kademlia):</h4>
+        <div id="discoveredPeers" class="empty">None</div>
+      </div>
+      <div class="status-section">
+        <h4>Subscriptions:</h4>
+        <div id="subscriptions" class="empty">None</div>
+      </div>
+      <div class="status-section">
+        <h4>Relays:</h4>
+        <div id="relays" class="empty">None</div>
+      </div>
+    </div>
 
     <script type="module" src="./main.js"></script>
   </body>

@@ -1,6 +1,8 @@
 # Rust
 target/
 Cargo.lock
+.p2p/
+simple-p2p-docstore/tests
 
 # WASM build output
 pkg/
