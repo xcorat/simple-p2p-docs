@@ -7,4 +7,6 @@ pub mod node;
 #[cfg(target_arch = "wasm32")]
 mod wasm_bindings;
 #[cfg(target_arch = "wasm32")]
+mod wasm_transport;
+#[cfg(target_arch = "wasm32")]
 pub use wasm_bindings::*;

@@ -8,7 +8,8 @@ name = "simple_p2p_docstore"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = []
+default = ["relay-client"]
+relay-client = []
 
 [dependencies]
 # Core libp2p - using PR #5978 branch for browser-to-browser WebRTC
@@ -19,6 +20,8 @@ libp2p = { git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(
     "kad",
     "macros",
     "relay",
+    "request-response",
+    "cbor",
 ] }
 libp2p_kad = { package = "libp2p-kad", git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(webrtc)-implement-webrtc-protocol-for-browser-to-browser-communication" }
 
@@ -47,11 +50,24 @@ libp2p = { git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(
     "kad",
     "macros",
     "wasm-bindgen",
+    "relay",
+    "request-response",
+    "cbor",
+    "noise",
+    "yamux",
 ] }
 libp2p_kad = { package = "libp2p-kad", git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(webrtc)-implement-webrtc-protocol-for-browser-to-browser-communication" }
 
 # Browser transport - using PR #5978 branch
 libp2p-webrtc-websys = { git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(webrtc)-implement-webrtc-protocol-for-browser-to-browser-communication", package = "libp2p-webrtc-websys" }
+
+# Additional transports for composite pattern (browser-to-browser support)
+libp2p-websocket-websys = { git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(webrtc)-implement-webrtc-protocol-for-browser-to-browser-communication", package = "libp2p-websocket-websys" }
+libp2p-relay = { git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(webrtc)-implement-webrtc-protocol-for-browser-to-browser-communication", package = "libp2p-relay" }
+libp2p-core = { git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(webrtc)-implement-webrtc-protocol-for-browser-to-browser-communication", package = "libp2p-core" }
+libp2p-webrtc-utils = "0.3"
+libp2p-noise = { git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(webrtc)-implement-webrtc-protocol-for-browser-to-browser-communication", package = "libp2p-noise" }
+libp2p-yamux = { git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(webrtc)-implement-webrtc-protocol-for-browser-to-browser-communication", package = "libp2p-yamux" }
 
 # WASM interop
 wasm-bindgen = "0.2"
@@ -60,6 +76,11 @@ js-sys = "0.3"
 web-sys = { version = "0.3", features = [
     "Window",
     "console",
+    "RtcPeerConnection",
+    "RtcDataChannel",
+    "RtcConfiguration",
+    "Navigator",
+    "MediaDevices",
 ] }
 tracing-wasm = "0.2"
 console_error_panic_hook = "0.1"
@@ -78,6 +99,8 @@ libp2p = { git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(
     "noise",
     "yamux",
     "relay",
+    "request-response",
+    "cbor",
 ] }
 libp2p_kad = { package = "libp2p-kad", git = "https://github.com/elijahhampton/rust-libp2p", branch = "feat(webrtc)-implement-webrtc-protocol-for-browser-to-browser-communication" }
 

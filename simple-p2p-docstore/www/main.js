@@ -10,9 +10,17 @@ function log(msg) {
 
 let node = null;
 let statusPollInterval = null;
+let connectedRelayAddr = null; // Store the relay address we connected to
 
 // Network status rendering
 function renderNetworkStatus(status) {
+  // My Peer ID
+  const myPeerIdEl = document.getElementById("myPeerId");
+  if (node) {
+    myPeerIdEl.textContent = node.peer_id;
+    myPeerIdEl.classList.remove('empty');
+  }
+
   // Listen addresses
   const listenAddrsEl = document.getElementById("listenAddrs");
   if (status.listenAddrs && status.listenAddrs.length > 0) {
@@ -64,10 +72,20 @@ function renderNetworkStatus(status) {
   // Relays
   const relaysEl = document.getElementById("relays");
   if (status.relays && status.relays.length > 0) {
-    relaysEl.innerHTML = status.relays.map(relay => `<div>${relay}</div>`).join('');
+    relaysEl.innerHTML = status.relays.map(relay => {
+      const supportsBadge = relay.supports_relay 
+        ? '<span style="color: green;">✓ Relay</span>' 
+        : '<span style="color: orange;">⚠ Unvalidated</span>';
+      const timeAgo = relay.connected_at ? new Date(relay.connected_at).toLocaleTimeString() : 'Unknown';
+      return `<div class="peer-item">
+        ${relay.peer_id} ${supportsBadge}
+        <div class="peer-addrs">${relay.full_addr}</div>
+        <div class="peer-addrs">Connected: ${timeAgo}</div>
+      </div>`;
+    }).join('');
     relaysEl.classList.remove('empty');
   } else {
-    relaysEl.innerHTML = "None (relay support not yet implemented)";
+    relaysEl.innerHTML = "None";
     relaysEl.classList.add('empty');
   }
 }
@@ -78,9 +96,10 @@ async function pollStatus() {
   
   try {
     const status = await node.get_network_status();
+    // console.log("Network status:", status); // Debug
     renderNetworkStatus(status);
   } catch (e) {
-    // Ignore errors during polling
+    console.error("Error polling network status:", e);
   }
 }
 
@@ -113,6 +132,38 @@ async function pollEvents() {
           log('   No addresses discovered');
         }
         break;
+      case "directMessageReceived":
+        log(`💬 Direct message from ${event.peer_id}: ${event.data}`);
+        break;
+      case "directMessageSent":
+        log(`✓ Direct message sent to ${event.peer_id}`);
+        break;
+      case "listenStarted":
+        log(`👂 Started listening on ${event.addr}`);
+        break;
+      case "relayReservationCreated":
+        log(`🎉 Relay reservation created!`);
+        log(`📋 Your browser address: ${event.addr}`);
+        log(`💡 Share this address with other browsers to connect`);
+        // Display in UI
+        const reservationEl = document.getElementById("reservationAddr");
+        reservationEl.textContent = event.addr;
+        reservationEl.classList.remove('empty');
+        reservationEl.style.cursor = 'pointer';
+        reservationEl.onclick = () => {
+          navigator.clipboard.writeText(event.addr);
+          log("✓ Copied to clipboard!");
+        };
+        // Enable dial button
+        document.getElementById("dialBrowserBtn").disabled = false;
+        break;
+      case "relayConnectionEstablished":
+        log(`🔗 Relay connection established with ${event.peer_id}`);
+        break;
+      case "webrtcConnectionEstablished":
+        log(`✅ Direct WebRTC connection established with ${event.peer_id}`);
+        log(`🚀 You are now connected peer-to-peer!`);
+        break;
       case "error":
         log(`❌ Error: ${event.msg}`);
         break;
@@ -132,13 +183,14 @@ async function pollEvents() {
   document.getElementById("connectBtn").addEventListener("click", async () => {
     const addr = document.getElementById("serverAddr").value.trim();
     if (!addr) {
-      log("Please enter a server multiaddr (webrtc-direct)");
+      log("Please enter a relay server multiaddr (webrtc-direct)");
       return;
     }
     try {
       node = new wasm.WasmNode(addr);
+      connectedRelayAddr = addr; // Store for later use
       log(`Started node (peer_id: ${node.peer_id})`);
-      log("Dialing server...");
+      log("Connecting to relay server...");
       pollEvents(); // Start event polling
       
       // Start status polling every 1s
@@ -147,8 +199,63 @@ async function pollEvents() {
       }
       statusPollInterval = setInterval(pollStatus, 1000);
       pollStatus(); // Initial poll
+      
+      // Enable relay listen button after connection
+      document.getElementById("listenRelayBtn").disabled = false;
     } catch (e) {
       log("Connection error: " + e);
+    }
+  });
+
+  document.getElementById("listenRelayBtn").addEventListener("click", async () => {
+    if (!node || !connectedRelayAddr) {
+      log("Not connected to relay yet");
+      return;
+    }
+    try {
+      // Step 1: Listen on relay circuit
+      node.listen_on_relay(connectedRelayAddr);
+      log("📡 Requesting relay reservation...");
+      document.getElementById("listenRelayBtn").disabled = true;
+      
+      // Step 2: Start WebRTC listener (after reservation is created)
+      // We'll enable this button after reservation is created
+      document.getElementById("listenWebRTCBtn").disabled = false;
+    } catch (e) {
+      log("listen_on_relay error: " + e);
+    }
+  });
+
+  document.getElementById("listenWebRTCBtn").addEventListener("click", async () => {
+    if (!node) {
+      log("Not connected yet");
+      return;
+    }
+    try {
+      node.listen_for_webrtc();
+      log("👂 Starting WebRTC listener for incoming connections...");
+      document.getElementById("listenWebRTCBtn").disabled = true;
+    } catch (e) {
+      log("listen_for_webrtc error: " + e);
+    }
+  });
+
+  document.getElementById("dialBrowserBtn").addEventListener("click", async () => {
+    if (!node) {
+      log("Not connected yet");
+      return;
+    }
+    const peerAddr = document.getElementById("browserPeerAddr").value.trim();
+    if (!peerAddr) {
+      log("Please enter a browser peer address");
+      return;
+    }
+    try {
+      node.dial_peer(peerAddr);
+      log(`🔗 Dialing browser peer: ${peerAddr}`);
+      log("⏳ Establishing WebRTC connection via relay...");
+    } catch (e) {
+      log("dial_peer error: " + e);
     }
   });
 
@@ -182,6 +289,26 @@ async function pollEvents() {
       log(`Started Kademlia find_peer query for ${peerId}`);
     } catch (e) {
       log("find_peer error: " + e);
+    }
+  });
+
+  document.getElementById("sendDirectBtn").addEventListener("click", async () => {
+    if (!node) {
+      log("Not connected yet");
+      return;
+    }
+    const peerId = document.getElementById("directPeerId").value.trim();
+    const msg = document.getElementById("directMsg").value.trim();
+    if (!peerId || !msg) {
+      log("Please enter both peer id and message");
+      return;
+    }
+    try {
+      node.send_direct(peerId, msg);
+      log(`Sending direct message to ${peerId}: ${msg}`);
+      document.getElementById("directMsg").value = ""; // Clear input
+    } catch (e) {
+      log("send_direct error: " + e);
     }
   });
 })();

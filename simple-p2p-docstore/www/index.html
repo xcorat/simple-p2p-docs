@@ -24,7 +24,17 @@
 
     <div class="row">
       <input id="serverAddr" placeholder="/ip4/127.0.0.1/udp/9090/webrtc-direct/certhash/<hash>/p2p/<peer-id>" />
-      <button id="connectBtn">Connect</button>
+      <button id="connectBtn">Connect to Relay</button>
+    </div>
+
+    <div class="row">
+      <button id="listenRelayBtn" disabled>Listen on Relay</button>
+      <button id="listenWebRTCBtn" disabled>Start WebRTC Listener</button>
+    </div>
+
+    <div class="row">
+      <input id="browserPeerAddr" placeholder="Browser peer address (from reservation)" style="flex: 2" />
+      <button id="dialBrowserBtn" disabled>Connect to Browser</button>
     </div>
 
     <div class="row">
@@ -37,10 +47,24 @@
       <button id="findPeerBtn">Find Peer</button>
     </div>
 
+    <div class="row">
+      <input id="directPeerId" placeholder="PeerId for direct message" />
+      <input id="directMsg" placeholder="Direct message (request-response)" />
+      <button id="sendDirectBtn">Send Direct</button>
+    </div>
+
     <div id="log"></div>
 
     <div id="networkStatus">
       <h3>Network Status</h3>
+      <div class="status-section">
+        <h4>My Peer ID:</h4>
+        <div id="myPeerId" class="empty">Not connected</div>
+      </div>
+      <div class="status-section">
+        <h4>My Reservation Address (share this for browser-to-browser):</h4>
+        <div id="reservationAddr" class="empty">Not listening yet</div>
+      </div>
       <div class="status-section">
         <h4>Listen Addresses:</h4>
         <div id="listenAddrs" class="empty">Not connected</div>
