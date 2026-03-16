@@ -141,38 +141,44 @@ pub fn build_composite_transport(
 
     let (webrtc_transport, webrtc_behaviour) =
         BrowserWebrtcTransport::new(webrtc_config, config.signaling_config, transport_waker);
-    let webrtc_transport_boxed = webrtc_transport.boxed();
+    let browser_webrtc_transport_boxed = webrtc_transport.boxed();
 
-    // 3. Build the final composite transport
-    // For now: WebRTC OR Relay (WebRTC-direct is handled by the base WebRTC transport)
-    // Future: Can add WebSocket here when config.enable_websocket is true
+    // 3. Create Standard WebRTC transport for browser-to-server connections
+    let standard_webrtc_transport = libp2p_webrtc_websys::Transport::new(
+        libp2p_webrtc_websys::Config::new(&config.keypair),
+    )
+    .boxed();
+
+    // Combine standard and browser webrtc transports
+    let combined_webrtc = standard_webrtc_transport
+        .or_transport(browser_webrtc_transport_boxed)
+        .map(|either_webrtc, _| match either_webrtc {
+            futures::future::Either::Left(output) => output,
+            futures::future::Either::Right(output) => output,
+        });
+
+    // 4. Build the final composite transport
+    // StandardWebRTC OR BrowserWebRTC OR Relay
     let final_transport = if config.enable_websocket {
         // Future expansion: Add WebSocket transport
-        // let ws_transport = libp2p_websocket_websys::Transport::default()...
-        // webrtc_transport_boxed.or_transport(relay_transport_upgraded).or_transport(ws_transport)
-        
-        // For now, just use the two-transport composition
-        webrtc_transport_boxed
+        combined_webrtc
             .or_transport(relay_transport_upgraded)
             .map(|either_output, _| match either_output {
-                // WebRTC output
                 futures::future::Either::Left((peer_id, connection)) => {
-                    (peer_id, StreamMuxerBox::new(connection))
+                    (peer_id, StreamMuxerBox::new(connection)) // It's already StreamMuxerBox actually, but wait...
                 }
-                // Relay output (already returns correct type)
+                // Relay output
                 futures::future::Either::Right(output) => output,
             })
             .boxed()
     } else {
-        // Standard two-transport composition: WebRTC OR Relay
-        webrtc_transport_boxed
+        combined_webrtc
             .or_transport(relay_transport_upgraded)
             .map(|either_output, _| match either_output {
-                // WebRTC output
                 futures::future::Either::Left((peer_id, connection)) => {
-                    (peer_id, StreamMuxerBox::new(connection))
+                    (peer_id, connection) // Connection is already StreamMuxerBox from .boxed()
                 }
-                // Relay output (already returns correct type)
+                // Relay output
                 futures::future::Either::Right(output) => output,
             })
             .boxed()
